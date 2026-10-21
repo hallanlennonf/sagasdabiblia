@@ -1,0 +1,12 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sagas Publisher — conectado</title><link rel="stylesheet" href="estilo.css"></head><body>
+<h1>Sagas Publisher</h1>
+<p id="msg">Conectando...</p>
+<p><code id="code" style="word-break:break-all"></code></p>
+<script>
+const p=new URLSearchParams(location.search);
+if(p.get('code')){document.getElementById('msg').textContent='Conta conectada. Copie o código abaixo e cole no Sagas Publisher:';document.getElementById('code').textContent=p.get('code');}
+else{document.getElementById('msg').textContent='Não foi possível conectar: '+(p.get('error_description')||p.get('error')||'sem código');}
+</script>
+<footer><a href="index.html">Início</a> · <a href="privacidade.html">Privacidade</a> · <a href="termos.html">Termos</a></footer>
+</body></html>
