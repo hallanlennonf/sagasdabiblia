@@ -1,12 +1,33 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sagas Publisher — conectado</title><link rel="stylesheet" href="estilo.css"></head><body>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sagas Publisher — conectando</title>
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
 <h1>Sagas Publisher</h1>
-<p id="msg">Conectando...</p>
-<p><code id="code" style="word-break:break-all"></code></p>
+<p id="msg">Conectando a sua conta...</p>
+<footer><a href="publicar.html">Publicar</a> · <a href="privacidade.html">Privacidade</a> · <a href="termos.html">Termos</a></footer>
 <script>
-const p=new URLSearchParams(location.search);
-if(p.get('code')){document.getElementById('msg').textContent='Conta conectada. Copie o código abaixo e cole no Sagas Publisher:';document.getElementById('code').textContent=p.get('code');}
-else{document.getElementById('msg').textContent='Não foi possível conectar: '+(p.get('error_description')||p.get('error')||'sem código');}
+const p = new URLSearchParams(location.search);
+const msg = document.getElementById("msg");
+const st = sessionStorage.getItem("tt_state");
+if (!p.get("code")) {
+  msg.textContent = "Não foi possível conectar: " + (p.get("error_description") || p.get("error") || "sem código");
+} else if (st && p.get("state") !== st) {
+  msg.textContent = "Falha de segurança (state diferente). Tente conectar de novo.";
+} else {
+  fetch("http://127.0.0.1:8765/tiktok/conectar", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({code: p.get("code")})})
+    .then(r => r.json().then(d => ({ok: r.ok, d})))
+    .then(({ok, d}) => {
+      if (ok) { msg.textContent = "Conta conectada! Abrindo o painel..."; setTimeout(() => location.href = "publicar.html", 1200); }
+      else msg.textContent = "Erro ao conectar: " + (d.detail || "");
+    })
+    .catch(() => msg.textContent = "O Sagas Publisher (worker local) não está ligado neste computador.");
+}
 </script>
-<footer><a href="index.html">Início</a> · <a href="privacidade.html">Privacidade</a> · <a href="termos.html">Termos</a></footer>
-</body></html>
+</body>
+</html>
