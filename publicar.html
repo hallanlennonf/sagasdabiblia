@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sagas Publisher</title>
+<link rel="stylesheet" href="estilo.css">
+<style>
+  .card{background:#1d2030;border:1px solid #2c3046;border-radius:14px;padding:18px;margin:16px 0}
+  label{display:block;margin:12px 0 6px;font-weight:bold}
+  select,textarea{width:100%;box-sizing:border-box;background:#11131b;color:#ece6d6;border:1px solid #3a3f5c;border-radius:8px;padding:10px;font:inherit}
+  textarea{min-height:110px}
+  .linha{display:flex;align-items:center;gap:10px;margin:8px 0}
+  .linha input{width:18px;height:18px}
+  button{background:#fe2c55;color:#fff;border:0;border-radius:8px;padding:12px 18px;font:inherit;font-weight:bold;cursor:pointer}
+  button.sec{background:#3a3f5c}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  #perfil{display:flex;align-items:center;gap:12px}
+  #perfil img{width:56px;height:56px;border-radius:50%}
+  video{width:100%;max-height:420px;border-radius:10px;background:#000}
+  .aviso{font-size:.9em;opacity:.85}
+  #status{white-space:pre-wrap}
+</style>
+</head>
+<body>
+<h1>Sagas Publisher</h1>
+<p class="aviso">Ferramenta interna do perfil @sagasdabiblia para publicar os nossos próprios vídeos no TikTok.</p>
+
+<div class="card" id="conectar">
+  <p>1. Conecte a conta do TikTok que vai publicar.</p>
+  <button id="btnLogin">Conectar com TikTok</button>
+</div>
+
+<div class="card" id="painel" hidden>
+  <div id="perfil"><img id="avatar" alt=""><div><strong id="nick"></strong><br><span id="user" class="aviso"></span></div></div>
+
+  <label for="video">2. Vídeo</label>
+  <select id="video"></select>
+  <video id="previa" controls muted playsinline></video>
+
+  <label for="legenda">Legenda</label>
+  <textarea id="legenda" maxlength="2200"></textarea>
+
+  <label for="priv">Quem pode ver este vídeo</label>
+  <select id="priv"><option value="" selected disabled>Escolha a privacidade</option></select>
+
+  <label>Permitir que os usuários</label>
+  <div class="linha"><input type="checkbox" id="com"><span>Comentem</span></div>
+  <div class="linha"><input type="checkbox" id="due"><span>Façam Dueto</span></div>
+  <div class="linha"><input type="checkbox" id="cos"><span>Façam Costura (Stitch)</span></div>
+
+  <label>Divulgação de conteúdo</label>
+  <div class="linha"><input type="checkbox" id="comercial"><span>Este vídeo promove uma marca, produto ou serviço</span></div>
+  <div id="comercialOps" hidden>
+    <div class="linha"><input type="checkbox" id="marca"><span>A sua marca (será rotulado "Conteúdo promocional")</span></div>
+    <div class="linha"><input type="checkbox" id="parceria"><span>Conteúdo de marca de terceiros (será rotulado "Parceria paga")</span></div>
+  </div>
+  <div class="linha"><input type="checkbox" id="ia" checked disabled><span>Conteúdo gerado por IA (sempre marcado nos nossos vídeos)</span></div>
+
+  <p class="aviso" id="consent">Ao publicar, você concorda com a <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank">Confirmação de Uso de Música</a> do TikTok.</p>
+  <p class="aviso">Depois de publicar, o processamento do vídeo pode levar alguns minutos até aparecer no perfil.</p>
+  <button id="btnPost" disabled>Publicar no TikTok</button>
+  <button id="btnDraft" class="sec" disabled>Enviar como rascunho</button>
+  <p id="status"></p>
+</div>
+
+<footer><a href="index.html">Início</a> · <a href="privacidade.html">Privacidade</a> · <a href="termos.html">Termos</a></footer>
+
+<script>
+const WORKER = "http://127.0.0.1:8765";
+const CLIENT_KEY = "sbawut5qci65iyjgx3";
+const REDIRECT = "https://hallanlennonf.github.io/sagasdabiblia/callback.html";
+const $ = id => document.getElementById(id);
+let criador = null, videos = [];
+
+$("btnLogin").onclick = () => {
+  const st = Math.random().toString(36).slice(2);
+  sessionStorage.setItem("tt_state", st);
+  location.href = "https://www.tiktok.com/v2/auth/authorize/?" + new URLSearchParams({
+    client_key: CLIENT_KEY, scope: "user.info.basic,video.upload,video.publish",
+    response_type: "code", redirect_uri: REDIRECT, state: st});
+};
+
+async function carregar() {
+  try {
+    criador = await (await fetch(WORKER + "/tiktok/criador")).json();
+    if (!criador.creator_username) throw new Error(criador.detail || "não conectado");
+  } catch (e) { return; }
+  $("conectar").hidden = true; $("painel").hidden = false;
+  $("avatar").src = criador.creator_avatar_url || "";
+  $("nick").textContent = criador.creator_nickname;
+  $("user").textContent = "@" + criador.creator_username + " · vídeos de até " + Math.round(criador.max_video_post_duration_sec / 60) + " min";
+  for (const p of criador.privacy_level_options) {
+    const nomes = {PUBLIC_TO_EVERYONE: "Todos", MUTUAL_FOLLOW_FRIENDS: "Amigos", FOLLOWER_OF_CREATOR: "Seguidores", SELF_ONLY: "Somente eu"};
+    $("priv").add(new Option(nomes[p] || p, p));
+  }
+  if (criador.comment_disabled) { $("com").disabled = true; }
+  if (criador.duet_disabled) { $("due").disabled = true; }
+  if (criador.stitch_disabled) { $("cos").disabled = true; }
+  videos = await (await fetch(WORKER + "/tiktok/videos")).json();
+  for (const v of videos) $("video").add(new Option(v.arquivo.replace(".mp4", ""), v.arquivo));
+  escolher();
+}
+
+function escolher() {
+  const v = videos.find(x => x.arquivo === $("video").value);
+  if (!v) return;
+  $("previa").src = WORKER + "/tiktok/previa/" + encodeURIComponent(v.arquivo);
+  $("legenda").value = v.legenda;
+  validar();
+}
+
+function validar() {
+  const ok = $("priv").value && (!$("comercial").checked || $("marca").checked || $("parceria").checked);
+  $("btnPost").disabled = !ok;
+  $("btnDraft").disabled = !$("video").value;
+  if ($("parceria").checked && $("priv").value === "SELF_ONLY") $("status").textContent = "Conteúdo de marca não pode ser privado.";
+}
+
+$("video").onchange = escolher;
+for (const id of ["priv", "marca", "parceria"]) $(id).onchange = validar;
+$("comercial").onchange = () => { $("comercialOps").hidden = !$("comercial").checked; validar(); };
+
+async function enviar(rascunho) {
+  $("btnPost").disabled = $("btnDraft").disabled = true;
+  $("status").textContent = rascunho ? "Enviando para os rascunhos do TikTok..." : "Enviando e publicando no TikTok...";
+  const r = await fetch(WORKER + "/tiktok/postar", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({arquivo: $("video").value, legenda: $("legenda").value, privacidade: $("priv").value || "SELF_ONLY",
+      comentarios: $("com").checked, dueto: $("due").checked, costura: $("cos").checked,
+      comercial_marca_propria: $("marca").checked, comercial_parceria: $("parceria").checked, rascunho})});
+  const d = await r.json();
+  $("status").textContent = r.ok ? "Pronto: " + (d.status || "") + (d.privacidade ? " (" + d.privacidade + ")" : "") : "Erro: " + (d.detail || r.status);
+  validar();
+}
+$("btnPost").onclick = () => enviar(false);
+$("btnDraft").onclick = () => enviar(true);
+carregar();
+</script>
+</body>
+</html>
